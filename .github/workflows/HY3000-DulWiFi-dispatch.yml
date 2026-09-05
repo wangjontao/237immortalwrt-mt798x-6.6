@@ -1,6 +1,8 @@
 name: HY3000 DulWiFi build
 on:
   workflow_dispatch:
+  push:
+    branches: [ "codex/hy3000-dulwifi-services" ]
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -15,6 +17,15 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           cp Config/HY3000.txt .config
+          cat >> .config <<'EOF'
+CONFIG_PACKAGE_luci-app-passwall=y
+CONFIG_PACKAGE_luci-app-passwall2=y
+CONFIG_PACKAGE_luci-app-homeproxy=y
+CONFIG_PACKAGE_luci-app-openclash=y
+CONFIG_PACKAGE_luci-app-nps=y
+CONFIG_PACKAGE_luci-app-ttyd=y
+CONFIG_PACKAGE_luci-theme-argon=y
+EOF
           make defconfig
           rm -rf dl/go-mod-cache
           make download -j2 V=s
