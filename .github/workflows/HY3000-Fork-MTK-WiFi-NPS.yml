@@ -235,7 +235,10 @@ jobs:
           NPS_INIT
           cat > package/base-files/files/etc/hotplug.d/iface/99-nps-wan-mac <<'NPS_HOTPLUG'
           #!/bin/sh
-          [ -e /etc/nps-wan-mac.done ] || { [ "$INTERFACE" = 'wan' ] && [ "$ACTION" = 'ifup' ] && /usr/libexec/nps-wan-mac >/dev/null 2>&1 &; }
+          [ -e /etc/nps-wan-mac.done ] && exit 0
+          if [ "$INTERFACE" = 'wan' ] && [ "$ACTION" = 'ifup' ]; then
+                  /usr/libexec/nps-wan-mac >/dev/null 2>&1 &
+          fi
           NPS_HOTPLUG
           cat > package/base-files/files/etc/uci-defaults/99-enable-nps-wan-mac <<'NPS_DEFAULT'
           #!/bin/sh
