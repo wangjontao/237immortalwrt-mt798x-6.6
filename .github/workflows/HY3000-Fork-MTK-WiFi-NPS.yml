@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: hy3000-24.10-mtkwifi-luci-nps
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   WRT_REPO: https://github.com/wangjontao/237immortalwrt-mt798x-6.6.git
@@ -60,11 +60,6 @@ jobs:
           test -f target/linux/mediatek/dts/mt7981b-philips-hy3000.dts
           grep -q 'TARGET_DEVICES += philips_hy3000' target/linux/mediatek/image/filogic.mk
 
-          # This hardware variant has 1 GiB RAM. Update only the HY3000 DTS.
-          DTS=target/linux/mediatek/dts/mt7981b-philips-hy3000.dts
-          grep -q 'reg = <0 0x40000000 0 0x20000000>;' "$DTS"
-          sed -i 's/reg = <0 0x40000000 0 0x20000000>;/reg = <0 0x40000000 0 0x40000000>;/' "$DTS"
-          grep -q 'reg = <0 0x40000000 0 0x40000000>;' "$DTS"
 
       - name: Restore downloads and compiler cache
         uses: actions/cache@v4
@@ -376,7 +371,7 @@ jobs:
           name: Philips HY3000 MTK WiFi LuCI NPS 24.10 ${{ env.BUILD_DATE }}
           files: wrt/upload/*
           body: |
-            Philips HY3000 eMMC / MT7981 / 1024 MB RAM / ImmortalWrt 24.10 / kernel 6.6
+            Philips HY3000 eMMC / MT7981 / source-default memory definition / ImmortalWrt 24.10 / kernel 6.6
             Source commit: ${{ env.WRT_HASH }}
             Management IP: 192.168.7.1
             Wi-Fi: DulWiFi-5G / DulWiFi-2.4G
