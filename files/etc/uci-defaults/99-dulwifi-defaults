@@ -1,0 +1,17 @@
+#!/bin/sh
+# HY3000 DulWiFi first-boot defaults
+uci -q set system.@system[0].hostname='DulWiFi'
+uci -q set network.lan.ipaddr='192.168.9.1'
+uci -q set wireless.@wifi-iface[0].ssid='DulWiFi-2.4G'
+uci -q set wireless.@wifi-iface[0].encryption='psk2'
+uci -q set wireless.@wifi-iface[0].key='password'
+uci -q set wireless.@wifi-iface[1].ssid='DulWiFi-5G'
+uci -q set wireless.@wifi-iface[1].encryption='psk2'
+uci -q set wireless.@wifi-iface[1].key='password'
+MAC=$(ip link show wan 2>/dev/null | awk '/link\/ether/{print $2}' | tr -d ':')
+[ -n "$MAC" ] && uci -q set nps.@nps[0].server='47.83.9.208' && uci -q set nps.@nps[0].vkey="$MAC" && uci -q set nps.@nps[0].enable='1'
+uci -q commit system
+uci -q commit network
+uci -q commit wireless
+uci -q commit nps
+exit 0
