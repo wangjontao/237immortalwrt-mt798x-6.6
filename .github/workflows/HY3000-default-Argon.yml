@@ -1,0 +1,135 @@
+name: HY3000 source defaults Argon
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/hy3000-default-argon
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: HY3000 default firmware with Argon
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout 237 source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Initialize build environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib \
+            gettext git libncurses-dev libssl-dev python3-setuptools rsync swig unzip \
+            zlib1g-dev file wget curl jq ccache zstd
+          sudo timedatectl set-timezone Asia/Shanghai
+
+      - name: Install Go 1.24
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.x
+          cache: false
+
+      - name: Verify native HY3000 source
+        run: |
+          test -s target/linux/mediatek/dts/mt7981b-philips-hy3000.dts
+          grep -q 'compatible = "philips,hy3000", "mediatek,mt7981"' target/linux/mediatek/dts/mt7981b-philips-hy3000.dts
+          grep -q 'TARGET_DEVICES += philips_hy3000' target/linux/mediatek/image/filogic.mk
+          test -s defconfig/mt7981-ax3000.config
+          echo "BUILD_DATE=$(date +'%Y.%m.%d-%H.%M.%S')" >> "$GITHUB_ENV"
+          echo "SOURCE_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Update native feeds and add Argon
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          rm -rf package/luci-theme-argon package/luci-app-argon-config
+          git clone --depth=1 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon
+          git clone --depth=1 https://github.com/jerrykuku/luci-app-argon-config.git package/luci-app-argon-config
+          find feeds/luci/collections -type f -name Makefile -exec sed -i 's/+luci-theme-bootstrap-mod/+luci-theme-argon/g; s/+luci-theme-bootstrap/+luci-theme-argon/g' {} +
+
+      - name: Select only Philips HY3000 with source-default MT7981 WiFi
+        run: |
+          cp defconfig/mt7981-ax3000.config .config
+          sed -i '/^CONFIG_TARGET_MULTI_PROFILE=/d' .config
+          sed -i '/^CONFIG_TARGET_PER_DEVICE_ROOTFS=/d' .config
+          sed -i '/^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_/d' .config
+          sed -i '/^CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_/d' .config
+          cat >> .config <<'CONFIG_EOF'
+          # CONFIG_TARGET_MULTI_PROFILE is not set
+          # CONFIG_TARGET_PER_DEVICE_ROOTFS is not set
+          CONFIG_TARGET_mediatek=y
+          CONFIG_TARGET_mediatek_filogic=y
+          CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_philips_hy3000=y
+          CONFIG_PACKAGE_luci=y
+          CONFIG_PACKAGE_luci-theme-argon=y
+          CONFIG_PACKAGE_luci-app-argon-config=y
+          CONFIG_LUCI_LANG_zh_Hans=y
+          CONFIG_EOF
+          make defconfig
+
+          grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_philips_hy3000=y' .config
+          grep -qx 'CONFIG_PACKAGE_kmod-mt_wifi=y' .config
+          grep -qx 'CONFIG_PACKAGE_kmod-conninfra=y' .config
+          grep -qx 'CONFIG_PACKAGE_kmod-warp=y' .config
+          grep -qx 'CONFIG_PACKAGE_mtwifi-cfg=y' .config
+          grep -qx 'CONFIG_WARP_VERSION=2' .config
+          grep -qx 'CONFIG_WARP_CHIPSET="mt7981"' .config
+          grep -qx 'CONFIG_PACKAGE_luci-theme-argon=y' .config
+          grep -qx 'CONFIG_PACKAGE_luci-app-argon-config=y' .config
+          ./scripts/diffconfig.sh | tee HY3000-default-argon.config
+
+      - name: Download sources
+        run: |
+          make download -j"$(nproc)"
+          find dl -type f -size -1024c -print -delete
+
+      - name: Compile firmware
+        run: |
+          make tools/install -j"$(nproc)"
+          make toolchain/install -j"$(nproc)"
+          make target/linux/compile -j"$(nproc)"
+          make package/mtk/drivers/warp/compile -j1 V=s
+          make package/mtk/drivers/mt_wifi/compile -j1 V=s
+          make -j"$(nproc)" || make -j1 V=s
+
+      - name: Verify firmware contents
+        run: |
+          mkdir -p upload
+          mapfile -t images < <(find bin/targets/mediatek/filogic -maxdepth 1 -type f -iname '*philips_hy3000*sysupgrade*' -size +5M)
+          [ "${#images[@]}" -gt 0 ]
+          mapfile -t manifests < <(find bin/targets/mediatek/filogic -maxdepth 1 -type f -name '*philips_hy3000*.manifest')
+          [ "${#manifests[@]}" -gt 0 ]
+          for package in kmod-mt_wifi kmod-conninfra kmod-warp mtwifi-cfg luci-theme-argon luci-app-argon-config; do
+            grep -q "^${package} " "${manifests[0]}" || { echo "ERROR: ${package} missing"; exit 1; }
+          done
+          cp -a "${images[@]}" "${manifests[@]}" upload/
+          cp HY3000-default-argon.config upload/
+          find bin/targets/mediatek/filogic -maxdepth 1 -type f -name '*.buildinfo' -exec cp -a {} upload/ \;
+          sha256sum upload/* | tee upload/SHA256SUMS
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HY3000-default-Argon-${{ env.BUILD_DATE }}
+          path: upload/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: HY3000-default-Argon-${{ env.BUILD_DATE }}
+          name: HY3000 source-default firmware with Argon ${{ env.BUILD_DATE }}
+          files: upload/*
+          body: |
+            Philips HY3000 firmware built directly from wangjontao/237immortalwrt-mt798x-6.6.
+            Device settings, memory definition and proprietary MT7981 WiFi configuration are from the source tree defaults.
+            The only UI customization is the Argon theme.
