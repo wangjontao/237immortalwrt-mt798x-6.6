@@ -9,9 +9,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: hy3000-24.10-mtkwifi-luci-nps
-  cancel-in-progress: false
 
 env:
   WRT_REPO: https://github.com/wangjontao/237immortalwrt-mt798x-6.6.git
