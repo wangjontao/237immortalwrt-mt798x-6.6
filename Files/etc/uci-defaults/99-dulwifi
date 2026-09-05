@@ -1,0 +1,27 @@
+#!/bin/sh
+
+uci -q set system.@system[0].hostname='DulWiFi'
+uci -q commit system
+uci -q set network.lan.ipaddr='192.168.7.1'
+uci -q commit network
+
+for section in $(uci -q show wireless | sed -n "s/^wireless\.\([^=]*\)=wifi-iface/\1/p"); do
+	device="$(uci -q get wireless."$section".device)"
+	band="$(uci -q get wireless."$device".band)"
+
+	case "$band:$device" in
+		5g:*|5ghz:*|*:*_1_2|*:rax*)
+			ssid='DulWiFi-5G'
+			;;
+		*)
+			ssid='DulWiFi-2.4G'
+			;;
+	esac
+
+	uci -q set wireless."$section".ssid="$ssid"
+	uci -q set wireless."$section".encryption='psk2+ccmp'
+	uci -q set wireless."$section".key='password'
+done
+
+uci -q commit wireless
+exit 0
