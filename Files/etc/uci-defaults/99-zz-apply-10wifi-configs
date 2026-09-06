@@ -1,0 +1,23 @@
+#!/bin/sh
+SRC=/usr/share/10wifi-config
+BACKUP=/etc/config-backup-before-10wifi
+FILES='dhcp firewall network passwall passwall2 wireless'
+
+[ -d "$SRC" ] || exit 1
+mkdir -p "$BACKUP" || exit 1
+
+for name in $FILES; do
+    [ -s "$SRC/$name" ] || exit 1
+    [ -e "/etc/config/$name" ] && cp -p "/etc/config/$name" "$BACKUP/$name"
+done
+
+for name in $FILES; do
+    cp "$SRC/$name" "/etc/config/$name" || exit 1
+    chmod 0600 "/etc/config/$name"
+done
+
+uci -q set system.@system[0].hostname='DulWiFi-10WiFi'
+uci -q commit system
+printf '%s\n' 'Original configurations were saved before applying the supplied 10-WiFi set.' > "$BACKUP/README"
+sync
+exit 0
