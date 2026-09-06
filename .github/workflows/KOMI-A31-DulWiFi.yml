@@ -162,11 +162,14 @@ jobs:
           begin = s.index("define Device/konka_komi-a31\n")
           finish = s.index("\nendef", begin)
           block = s[begin:finish]
-          old = "  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware"
-          new = "  DEVICE_PACKAGES := kmod-conninfra kmod-mt_wifi kmod-warp mtwifi-cfg luci-app-mtwifi-cfg"
-          if old not in block:
-              raise SystemExit("KOMI A31 default WiFi package list not found")
-          block = block.replace(old, new)
+          open_wifi = "  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware"
+          vendor_wifi = "  DEVICE_PACKAGES := kmod-conninfra kmod-mt_wifi kmod-warp mtwifi-cfg luci-app-mtwifi-cfg"
+          if open_wifi in block:
+              block = block.replace(open_wifi, vendor_wifi)
+          elif "DEVICE_PACKAGES :=" not in block:
+              block += "\n" + vendor_wifi
+          else:
+              raise SystemExit("Unexpected KOMI A31 DEVICE_PACKAGES layout")
           p.write_text(s[:begin] + block + s[finish:])
           PY
 
