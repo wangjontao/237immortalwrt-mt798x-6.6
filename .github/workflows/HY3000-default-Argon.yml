@@ -70,7 +70,6 @@ jobs:
           CONFIG_TARGET_mediatek=y
           CONFIG_TARGET_mediatek_mt7981=y
           CONFIG_TARGET_mediatek_filogic_DEVICE_philips_hy3000=y
-          CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_philips_hy3000=y
           CONFIG_PACKAGE_luci=y
           CONFIG_PACKAGE_luci-theme-argon=y
           CONFIG_PACKAGE_luci-app-argon-config=y
@@ -81,7 +80,6 @@ jobs:
           echo '=== resolved target and driver config ==='
           grep -E '^CONFIG_TARGET|philips_hy3000|kmod-(mt_wifi|conninfra|warp)|mtwifi-cfg|WARP_(VERSION|CHIPSET)|argon' .config | head -160
           grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_philips_hy3000=y' .config
-          grep -qx 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_philips_hy3000=y' .config
           grep -qx 'CONFIG_PACKAGE_kmod-mt_wifi=y' .config
           grep -qx 'CONFIG_PACKAGE_kmod-conninfra=y' .config
           grep -qx 'CONFIG_PACKAGE_kmod-warp=y' .config
