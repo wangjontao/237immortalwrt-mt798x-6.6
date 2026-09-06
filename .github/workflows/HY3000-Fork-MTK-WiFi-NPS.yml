@@ -1,4 +1,4 @@
-name: HY3000 DulWiFi full NPS
+name: 10WiFi-TK
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ env:
 
 jobs:
   build:
-    name: Philips HY3000 DulWiFi full NPS
+    name: 10WiFi-TK
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
@@ -163,6 +163,8 @@ jobs:
           rm -f package/base-files/files/etc/uci-defaults/99-enable-npc-wan-mac
           rm -f package/base-files/files/usr/libexec/npc-wan-mac
           chmod 0755 package/base-files/files/etc/uci-defaults/99-dulwifi
+          chmod 0755 package/base-files/files/usr/bin/setup-hy3000-10wifi-acl
+          chmod 0755 package/base-files/files/etc/uci-defaults/98-setup-10wifi-tk
 
           mkdir -p package/base-files/files/usr/libexec package/base-files/files/etc/hotplug.d/iface
           cat > package/base-files/files/usr/libexec/nps-wan-mac <<'NPS_MAC'
@@ -359,7 +361,7 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Philips-HY3000-DulWiFi-Full-NPS-24.10-${{ env.BUILD_DATE }}
+          name: 10WiFi-TK-24.10-${{ env.BUILD_DATE }}
           path: wrt/upload/*
           if-no-files-found: error
           retention-days: 30
@@ -367,14 +369,16 @@ jobs:
       - name: Publish firmware release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: Philips-HY3000-DulWiFi-Full-NPS-24.10-${{ env.BUILD_DATE }}
-          name: Philips HY3000 DulWiFi Full NPS 24.10 ${{ env.BUILD_DATE }}
+          tag_name: 10WiFi-TK-24.10-${{ env.BUILD_DATE }}
+          name: 10WiFi-TK 24.10 ${{ env.BUILD_DATE }}
           files: wrt/upload/*
           body: |
             Philips HY3000 eMMC / MT7981 / source-default memory definition / ImmortalWrt 24.10 / kernel 6.6
             Source commit: ${{ env.WRT_HASH }}
             Management IP: 192.168.9.1; root password: password; Wi-Fi password: password
-            Wi-Fi: DulWiFi-5G / DulWiFi-2.4G
+            Base Wi-Fi: DulWiFi-5G / DulWiFi-2.4G
+            First boot creates A1-A8 on 5 GHz and A9-A10 on 2.4 GHz, password a1111111.
+            Each SSID has an isolated bridge, DHCP subnet 172.16.1.0/24 through 172.16.10.0/24, no WAN zone forwarding, plus matching PassWall and PassWall2 ACL entries.
             PassWall: 26.3.6-1
             PassWall2: 26.3.5-1
             Included: source-default MT7981 proprietary Wi-Fi using Factory EEPROM, iStore, QuickStart, Argon, TTYD, common LuCI tools, PassWall, PassWall2, HomeProxy, OpenClash, advanced reboot, Watchcat scheduled reboot, luci-app-nps and npc
