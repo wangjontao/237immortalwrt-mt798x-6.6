@@ -1,16 +1,16 @@
-name: HY3000-new-Nps
+name: HY3000 V5 DulWiFi-10WiFi
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - HY3000-new-Nps
+      - codex/hy3000-v5-10wifi-configs
 
 permissions:
   contents: write
 
 concurrency:
-  group: hy3000-new-nps
+  group: hy3000-v5-10wifi-configs
   cancel-in-progress: false
 
 env:
@@ -159,6 +159,7 @@ jobs:
           rm -f package/base-files/files/etc/uci-defaults/99-enable-npc-wan-mac
           rm -f package/base-files/files/usr/libexec/npc-wan-mac
           chmod 0755 package/base-files/files/etc/uci-defaults/99-dulwifi
+          chmod 0755 package/base-files/files/etc/uci-defaults/99-zz-apply-10wifi-configs
 
           mkdir -p package/base-files/files/usr/libexec package/base-files/files/etc/hotplug.d/iface
           cat > package/base-files/files/usr/libexec/nps-wan-mac <<'NPS_MAC'
@@ -230,7 +231,7 @@ jobs:
 
           sed -i "s/192\\.168\\.[0-9]*\\.[0-9]*/192.168.7.1/g" \
             package/base-files/files/bin/config_generate
-          sed -i "s/hostname='.*'/hostname='DulWiFi'/g" \
+          sed -i "s/hostname='.*'/hostname='DulWiFi-10WiFi'/g" \
             package/base-files/files/bin/config_generate
 
           ROOT_HASH="$(openssl passwd -1 '@password@')"
@@ -341,7 +342,7 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Philips-HY3000-new-Nps-24.10-${{ env.BUILD_DATE }}
+          name: DulWiFi-10WiFi-V5-24.10-${{ env.BUILD_DATE }}
           path: wrt/upload/*
           if-no-files-found: error
           retention-days: 30
@@ -349,15 +350,15 @@ jobs:
       - name: Publish firmware release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: Philips-HY3000-new-Nps-24.10-${{ env.BUILD_DATE }}
-          name: Philips HY3000 new Nps 24.10 ${{ env.BUILD_DATE }}
+          tag_name: DulWiFi-10WiFi-V5-24.10-${{ env.BUILD_DATE }}
+          name: DulWiFi-10WiFi V5 24.10 ${{ env.BUILD_DATE }}
           files: wrt/upload/*
           body: |
             Philips HY3000 eMMC / MT7981 / ImmortalWrt 24.10 / kernel 6.6
             Source commit: ${{ env.WRT_HASH }}
-            Management IP: 192.168.7.1
-            Wi-Fi: DulWiFi-5G / DulWiFi-2.4G
+            Management IP after supplied network config: 192.168.10.1
+            System name: DulWiFi-10WiFi; Wi-Fi and ten isolated networks are loaded from the supplied configuration set
             PassWall: 26.3.6-1
             PassWall2: 26.3.5-1
-            Included: verified MT7981 mt_wifi driver, iStore, QuickStart, Argon, TTYD, PassWall, PassWall2, HomeProxy, and feed-provided luci-app-nps + npc
+            Included: verified V5 MT7981 mt_wifi driver, iStore, QuickStart, Argon, TTYD, PassWall, PassWall2, HomeProxy, feed luci-app-nps + npc, and supplied dhcp/firewall/network/passwall/passwall2/wireless files. Original /etc/config files are backed up to /etc/config-backup-before-10wifi on first boot.
             NPS client: source-feed luci-app-nps/npc; first boot writes 47.83.9.208:8024 TCP and the uppercase physical WAN MAC without colons to vkey.
