@@ -332,8 +332,8 @@ jobs:
           make package/mtk/drivers/warp/compile -j1 V=s
           make package/mtk/drivers/mt_wifi/compile -j1 V=s
           make package/feeds/packages/sing-box/compile -j1 V=s
+          # The feed nps source Makefile builds both nps and npc packages.
           make package/feeds/packages/nps/compile -j1 V=s
-          make package/feeds/packages/npc/compile -j1 V=s
 
       - name: Compile full firmware after critical packages
         working-directory: wrt
