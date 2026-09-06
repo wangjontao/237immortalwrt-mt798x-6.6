@@ -63,8 +63,8 @@ jobs:
           sed -i '/^CONFIG_TARGET_DEVICE_mediatek_.*_DEVICE_/d' .config
           sed -i '/^CONFIG_TARGET_DEVICE_PACKAGES_mediatek_.*_DEVICE_/d' .config
           cat >> .config <<'CONFIG_EOF'
-          # CONFIG_TARGET_MULTI_PROFILE is not set
-          # CONFIG_TARGET_PER_DEVICE_ROOTFS is not set
+          CONFIG_TARGET_MULTI_PROFILE=y
+          CONFIG_TARGET_PER_DEVICE_ROOTFS=y
           CONFIG_TARGET_mediatek=y
           CONFIG_TARGET_mediatek_mt7981=y
           CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_philips_hy3000=y
@@ -75,6 +75,8 @@ jobs:
           CONFIG_EOF
           make defconfig
 
+          echo '=== resolved target and driver config ==='
+          grep -E '^CONFIG_TARGET|philips_hy3000|kmod-(mt_wifi|conninfra|warp)|mtwifi-cfg|WARP_(VERSION|CHIPSET)|argon' .config | head -160
           grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_philips_hy3000=y' .config
           grep -qx 'CONFIG_PACKAGE_kmod-mt_wifi=y' .config
           grep -qx 'CONFIG_PACKAGE_kmod-conninfra=y' .config
