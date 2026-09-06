@@ -1,0 +1,139 @@
+#!/bin/sh
+# Create 10 isolated SSIDs, bridges, DHCP scopes, firewall zones and
+# PassWall/PassWall2 ACL entries on Philips HY3000.
+# Optional overrides: RADIO_5G=... RADIO_24G=...
+set -eu
+
+log() { printf '%s\n' "[hy3000-10wifi] $*"; }
+
+wifi_devices="$(uci -q show wireless | sed -n "s/^wireless\.\([^.=]*\)=wifi-device.*/\1/p")"
+[ -n "$wifi_devices" ] || { wifi config >/dev/null 2>&1 || true; wifi_devices="$(uci -q show wireless | sed -n "s/^wireless\.\([^.=]*\)=wifi-device.*/\1/p")"; }
+[ -n "$wifi_devices" ] || { log "No wifi-device found"; exit 1; }
+
+radio5="${RADIO_5G:-}"
+radio24="${RADIO_24G:-}"
+for radio in $wifi_devices; do
+    band="$(uci -q get wireless.$radio.band || true)"
+    hwmode="$(uci -q get wireless.$radio.hwmode || true)"
+    case "$band:$hwmode:$radio" in
+        5g:*|5ghz:*|*:11a:*|*:*:*_1_2|*:*:rax*) [ -n "$radio5" ] || radio5="$radio" ;;
+        2g:*|2ghz:*|*:11g:*|*:11n:*) [ -n "$radio24" ] || radio24="$radio" ;;
+    esac
+done
+first="$(printf '%s\n' $wifi_devices | sed -n '1p')"
+second="$(printf '%s\n' $wifi_devices | sed -n '2p')"
+[ -n "$radio24" ] || radio24="$first"
+[ -n "$radio5" ] || radio5="$second"
+[ -n "$radio5" ] || { log "Only one radio found; set RADIO_5G and RADIO_24G manually"; exit 1; }
+[ "$radio5" != "$radio24" ] || { log "5 GHz and 2.4 GHz resolved to the same radio"; exit 1; }
+log "5 GHz radio=$radio5; 2.4 GHz radio=$radio24"
+
+delete_named() {
+    config="$1"; section="$2"
+    uci -q delete "$config.$section" || true
+}
+delete_zone_forwardings() {
+    zone="$1"
+    for section in $(uci -q show firewall | sed -n "s/^firewall\.\([^.=]*\)=forwarding.*/\1/p"); do
+        src="$(uci -q get firewall.$section.src || true)"
+        [ "$src" = "$zone" ] && uci -q delete "firewall.$section"
+    done
+}
+
+i=1
+while [ "$i" -le 10 ]; do
+    net="a$i"
+    bridge="br-a$i"
+    ip="172.16.$i.1"
+    cidr="172.16.$i.0/24"
+    if [ "$i" -le 8 ]; then radio="$radio5"; else radio="$radio24"; fi
+
+    delete_named network "br_a$i"
+    delete_named network "a$i"
+    uci set network.br_a$i='device'
+    uci set network.br_a$i.name="$bridge"
+    uci set network.br_a$i.type='bridge'
+    uci set network.a$i='interface'
+    uci set network.a$i.device="$bridge"
+    uci set network.a$i.proto='static'
+    uci set network.a$i.ipaddr="$ip"
+    uci set network.a$i.netmask='255.255.255.0'
+    uci set network.a$i.delegate='0'
+
+    delete_named dhcp "a$i"
+    uci set dhcp.a$i='dhcp'
+    uci set dhcp.a$i.interface="$net"
+    uci set dhcp.a$i.start='100'
+    uci set dhcp.a$i.limit='100'
+    uci set dhcp.a$i.leasetime='12h'
+    uci set dhcp.a$i.dhcpv4='server'
+    uci set dhcp.a$i.ignore='0'
+
+    delete_named wireless "wifi_a$i"
+    uci set wireless.wifi_a$i='wifi-iface'
+    uci set wireless.wifi_a$i.device="$radio"
+    uci set wireless.wifi_a$i.mode='ap'
+    uci set wireless.wifi_a$i.network="$net"
+    uci set wireless.wifi_a$i.ssid="A$i"
+    uci set wireless.wifi_a$i.encryption='psk2+ccmp'
+    uci set wireless.wifi_a$i.key='a1111111'
+    uci set wireless.wifi_a$i.disabled='0'
+    uci set wireless.wifi_a$i.isolate='1'
+
+    delete_zone_forwardings "$net"
+    delete_named firewall "zone_a$i"
+    uci set firewall.zone_a$i='zone'
+    uci set firewall.zone_a$i.name="$net"
+    uci set firewall.zone_a$i.network="$net"
+    uci set firewall.zone_a$i.input='REJECT'
+    uci set firewall.zone_a$i.output='ACCEPT'
+    uci set firewall.zone_a$i.forward='REJECT'
+    uci set firewall.zone_a$i.masq='0'
+
+    delete_named firewall "a$i_dns"
+    uci set firewall.a$i_dns='rule'
+    uci set firewall.a$i_dns.name="A$i-Allow-DNS"
+    uci set firewall.a$i_dns.src="$net"
+    uci set firewall.a$i_dns.dest_port='53'
+    uci set firewall.a$i_dns.proto='tcp udp'
+    uci set firewall.a$i_dns.target='ACCEPT'
+
+    delete_named firewall "a$i_dhcp"
+    uci set firewall.a$i_dhcp='rule'
+    uci set firewall.a$i_dhcp.name="A$i-Allow-DHCP"
+    uci set firewall.a$i_dhcp.src="$net"
+    uci set firewall.a$i_dhcp.dest_port='67'
+    uci set firewall.a$i_dhcp.proto='udp'
+    uci set firewall.a$i_dhcp.family='ipv4'
+    uci set firewall.a$i_dhcp.target='ACCEPT'
+
+    for app in passwall passwall2; do
+        [ -f "/etc/config/$app" ] || continue
+        global="$(uci -q show $app | sed -n "s/^$app\.\([^.=]*\)=global.*/\1/p" | head -n1)"
+        [ -n "$global" ] && uci -q set "$app.$global.acl_enable=1"
+        uci -q delete "$app.acl_a$i" || true
+        uci set $app.acl_a$i='acl_rule'
+        uci set $app.acl_a$i.enabled='1'
+        uci set $app.acl_a$i.remarks="A$i TikTok ACL"
+        uci set $app.acl_a$i.interface="$net"
+        uci set $app.acl_a$i.sources="$cidr"
+        uci set $app.acl_a$i.use_global_config='1'
+        uci set $app.acl_a$i.tcp_proxy_mode='proxy'
+        uci set $app.acl_a$i.udp_proxy_mode='proxy'
+    done
+    i=$((i + 1))
+done
+
+uci commit network
+uci commit dhcp
+uci commit wireless
+uci commit firewall
+[ -f /etc/config/passwall ] && uci commit passwall
+[ -f /etc/config/passwall2 ] && uci commit passwall2
+
+/etc/init.d/network reload
+/etc/init.d/dnsmasq restart
+/etc/init.d/firewall restart
+wifi reload
+log "Created A1-A8 on 5 GHz, A9-A10 on 2.4 GHz, with 172.16.1.0/24 through 172.16.10.0/24."
+log "No forwarding from these zones to WAN was created. Configure proxy nodes and TikTok rules before enabling clients."
