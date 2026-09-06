@@ -1,0 +1,5 @@
+#!/bin/sh
+# Run once during the first successful OpenWrt boot.
+[ -s /usr/bin/setup-hy3000-10wifi-acl ] || exit 1
+sh /usr/bin/setup-hy3000-10wifi-acl || exit 1
+exit 0
