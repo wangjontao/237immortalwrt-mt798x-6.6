@@ -85,7 +85,7 @@ jobs:
           #!/bin/sh
           uci -q set network.lan.ipaddr='192.168.7.1'
           uci -q commit network
-          echo -e 'password\npassword' | passwd root
+          echo -e '@password@\n@password@' | passwd root
           n=0
           for s in $(uci -q show wireless | sed -n "s/^wireless\.\([^=]*\)=wifi-iface$/\1/p"); do
             n=$((n+1))
