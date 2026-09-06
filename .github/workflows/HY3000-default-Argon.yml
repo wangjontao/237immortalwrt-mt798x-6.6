@@ -66,7 +66,7 @@ jobs:
           # CONFIG_TARGET_MULTI_PROFILE is not set
           # CONFIG_TARGET_PER_DEVICE_ROOTFS is not set
           CONFIG_TARGET_mediatek=y
-          CONFIG_TARGET_mediatek_filogic=y
+          CONFIG_TARGET_mediatek_mt7981=y
           CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_philips_hy3000=y
           CONFIG_PACKAGE_luci=y
           CONFIG_PACKAGE_luci-theme-argon=y
