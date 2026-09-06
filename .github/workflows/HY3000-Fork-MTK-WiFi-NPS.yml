@@ -79,7 +79,7 @@ jobs:
           ./scripts/feeds install -d y -p nas_packages quickstart
           ./scripts/feeds install -d y -p nas_luci luci-app-quickstart
 
-      - name: Add fixed proxy packages and use feed-provided NPS
+      - name: Add fixed proxy packages and prepare iStore NPS
         working-directory: wrt
         run: |
           rm -rf package/luci-app-passwall package/luci-app-passwall2 \
@@ -101,22 +101,6 @@ jobs:
           git -C package/passwall-packages checkout "$PASSWALL_PACKAGES_COMMIT"
           rm -rf package/passwall-packages/.git
 
-          # Use the mutually compatible NPS packages supplied by this source's feeds.
-          ./scripts/feeds install -f -p packages nps npc
-          ./scripts/feeds install -f -p luci luci-app-nps luci-i18n-nps-zh-cn
-          NPS_CONFIG_FILE="$(find package/feeds/luci feeds/luci -path '*/luci-app-nps/root/etc/config/nps' -type f | head -n1)"
-          test -n "$NPS_CONFIG_FILE"
-          cat > "$NPS_CONFIG_FILE" <<'NPS_CONFIG'
-          config nps
-                  option enabled '1'
-                  option server_addr '47.83.9.208'
-                  option server_port '8024'
-                  option protocol 'tcp'
-                  option compress '1'
-                  option crypt '1'
-                  option vkey 'WANMAC'
-                  option log_level '4'
-          NPS_CONFIG
 
           rm -rf package/homeproxy package/luci-app-homeproxy feeds/luci/applications/luci-app-homeproxy package/feeds/luci/luci-app-homeproxy
           git clone https://github.com/immortalwrt/homeproxy.git /tmp/homeproxy
@@ -180,6 +164,15 @@ jobs:
           #!/bin/sh
           DONE=/etc/nps-wan-mac.done
           [ -e "$DONE" ] && exit 0
+
+          # app-meta-nps 0.26.10-r27 is an iStore online package. Install it
+          # after WAN connectivity is available, then configure the client.
+          if [ ! -f /etc/config/nps ] || [ ! -x /etc/init.d/nps ]; then
+                  command -v is-opkg >/dev/null 2>&1 || exit 1
+                  is-opkg update >/tmp/nps-istore-install.log 2>&1 || exit 1
+                  is-opkg install app-meta-nps >>/tmp/nps-istore-install.log 2>&1 || exit 1
+          fi
+          [ -f /etc/config/nps ] && [ -x /etc/init.d/nps ] || exit 1
           valid_mac() {
                   case "$1" in ''|00:00:00:00:00:00) return 1;; ??:??:??:??:??:??) return 0;; *) return 1;; esac
           }
@@ -272,9 +265,7 @@ jobs:
             PACKAGE_luci-app-store PACKAGE_luci-app-quickstart \
             PACKAGE_luci-theme-argon PACKAGE_luci-app-argon-config \
             PACKAGE_luci-app-ttyd PACKAGE_luci-app-passwall \
-            PACKAGE_luci-app-passwall2 PACKAGE_luci-app-homeproxy \
-            PACKAGE_nps PACKAGE_npc PACKAGE_luci-app-nps \
-            PACKAGE_luci-i18n-nps-zh-cn; do
+            PACKAGE_luci-app-passwall2 PACKAGE_luci-app-homeproxy; do
             sed -i "/^CONFIG_${symbol}=/d;/^# CONFIG_${symbol} is not set/d" .config
             echo "CONFIG_${symbol}=y" >> .config
           done
@@ -302,10 +293,11 @@ jobs:
           grep -q '^CONFIG_PACKAGE_luci-app-passwall=y' .config
           grep -q '^CONFIG_PACKAGE_luci-app-passwall2=y' .config
           grep -q '^CONFIG_PACKAGE_luci-app-homeproxy=y' .config
-          grep -q '^CONFIG_PACKAGE_nps=y' .config
-          grep -q '^CONFIG_PACKAGE_npc=y' .config
-          grep -q '^CONFIG_PACKAGE_luci-app-nps=y' .config
-          grep -q '^CONFIG_PACKAGE_luci-i18n-nps-zh-cn=y' .config
+          # NPS is deliberately installed by iStore on first WAN connection,
+          # so the newer feed build must not be baked into the image.
+          ! grep -q '^CONFIG_PACKAGE_nps=y' .config
+          ! grep -q '^CONFIG_PACKAGE_npc=y' .config
+          ! grep -q '^CONFIG_PACKAGE_luci-app-nps=y' .config
           ! grep -q '^CONFIG_PACKAGE_luci-app-npc=y' .config
           ./scripts/diffconfig.sh | tee "$GITHUB_WORKSPACE/HY3000-MTK-WiFi-LuCI-NPS-final.config"
 
@@ -332,8 +324,6 @@ jobs:
           make package/mtk/drivers/warp/compile -j1 V=s
           make package/mtk/drivers/mt_wifi/compile -j1 V=s
           make package/feeds/packages/sing-box/compile -j1 V=s
-          # The feed nps source Makefile builds both nps and npc packages.
-          make package/feeds/packages/nps/compile -j1 V=s
 
       - name: Compile full firmware after critical packages
         working-directory: wrt
@@ -358,10 +348,10 @@ jobs:
           grep -q '^kmod-mt_wifi ' "${manifests[0]}" || { echo 'ERROR: kmod-mt_wifi is missing from HY3000 firmware.'; exit 1; }
           grep -q '^kmod-conninfra ' "${manifests[0]}" || { echo 'ERROR: kmod-conninfra is missing from HY3000 firmware.'; exit 1; }
           grep -q '^mtwifi-cfg ' "${manifests[0]}" || { echo 'ERROR: mtwifi-cfg is missing from HY3000 firmware.'; exit 1; }
-          grep -q '^nps ' "${manifests[0]}" || { echo 'ERROR: feed nps server is missing from HY3000 firmware.'; exit 1; }
-          grep -q '^luci-app-nps ' "${manifests[0]}" || { echo 'ERROR: feed luci-app-nps is missing from HY3000 firmware.'; exit 1; }
-          grep -q '^luci-i18n-nps-zh-cn ' "${manifests[0]}" || { echo 'ERROR: NPS Chinese translation is missing from HY3000 firmware.'; exit 1; }
-          grep -q '^npc ' "${manifests[0]}" || { echo 'ERROR: feed npc client is missing from HY3000 firmware.'; exit 1; }
+          grep -q '^luci-app-store ' "${manifests[0]}" || { echo 'ERROR: iStore is missing; app-meta-nps cannot be installed.'; exit 1; }
+          ! grep -q '^nps ' "${manifests[0]}"
+          ! grep -q '^npc ' "${manifests[0]}"
+          ! grep -q '^luci-app-nps ' "${manifests[0]}"
           cp -a "${manifests[@]}" upload/
           find bin/targets/mediatek/filogic -maxdepth 1 -type f -name '*.buildinfo' -exec cp -a {} upload/ \;
           cp "$GITHUB_WORKSPACE/HY3000-MTK-WiFi-LuCI-NPS-final.config" upload/
@@ -389,5 +379,5 @@ jobs:
             Wi-Fi: DulWiFi-5G / DulWiFi-2.4G
             PassWall: 26.3.6-1
             PassWall2: 26.3.5-1
-            Included: fixed MT7981 mt_wifi driver, iStore, QuickStart home page, Argon theme, TTYD, common LuCI tools, PassWall, PassWall2, HomeProxy, and feed-provided nps/npc/luci-app-nps with Chinese translation
-            NPS client: 47.83.9.208:8024 TCP with compression and encryption; first successful startup writes the physical WAN MAC as uppercase vkey without colons.
+            Included: fixed MT7981 mt_wifi driver, iStore, QuickStart home page, Argon theme, TTYD, common LuCI tools, PassWall, PassWall2, HomeProxy, and iStore first-boot installation of app-meta-nps 0.26.10-r27 with its LuCI UI and Chinese translation
+            NPS client: iStore app-meta-nps 0.26.10-r27 is installed automatically after first WAN connection, then configured for 47.83.9.208:8024 TCP with compression, encryption and uppercase physical WAN MAC vkey.
