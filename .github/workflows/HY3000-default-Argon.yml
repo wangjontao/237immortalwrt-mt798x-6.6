@@ -60,14 +60,14 @@ jobs:
           cp defconfig/mt7981-ax3000.config .config
           sed -i '/^CONFIG_TARGET_MULTI_PROFILE=/d' .config
           sed -i '/^CONFIG_TARGET_PER_DEVICE_ROOTFS=/d' .config
-          sed -i '/^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_/d' .config
-          sed -i '/^CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_/d' .config
+          sed -i '/^CONFIG_TARGET_DEVICE_mediatek_mt7981_DEVICE_/d' .config
+          sed -i '/^CONFIG_TARGET_DEVICE_PACKAGES_mediatek_mt7981_DEVICE_/d' .config
           cat >> .config <<'CONFIG_EOF'
           # CONFIG_TARGET_MULTI_PROFILE is not set
           # CONFIG_TARGET_PER_DEVICE_ROOTFS is not set
           CONFIG_TARGET_mediatek=y
           CONFIG_TARGET_mediatek_mt7981=y
-          CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_philips_hy3000=y
+          CONFIG_TARGET_DEVICE_mediatek_mt7981_DEVICE_philips_hy3000=y
           CONFIG_PACKAGE_luci=y
           CONFIG_PACKAGE_luci-theme-argon=y
           CONFIG_PACKAGE_luci-app-argon-config=y
