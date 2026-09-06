@@ -1,10 +1,10 @@
-name: HY3000-24.10-MTK-WiFi-LuCI-NPS
+name: HY3000 DulWiFi full NPS
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - codex/hy3000-24.10-mtkwifi-nps
+      - codex/hy3000-dulwifi-full-nps
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ env:
 
 jobs:
   build:
-    name: Philips HY3000 MTK WiFi LuCI NPS
+    name: Philips HY3000 DulWiFi full NPS
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
@@ -79,7 +79,7 @@ jobs:
           ./scripts/feeds install -d y -p nas_packages quickstart
           ./scripts/feeds install -d y -p nas_luci luci-app-quickstart
 
-      - name: Add fixed proxy packages and prepare iStore NPS
+      - name: Add fixed proxy, OpenClash and UI packages
         working-directory: wrt
         run: |
           rm -rf package/luci-app-passwall package/luci-app-passwall2 \
@@ -107,6 +107,11 @@ jobs:
           git -C /tmp/homeproxy checkout "$HOME_PROXY_COMMIT"
           rm -rf /tmp/homeproxy/.git
           cp -a /tmp/homeproxy package/homeproxy
+
+          rm -rf package/luci-app-openclash
+          git clone --depth=1 --filter=blob:none --sparse https://github.com/vernesong/OpenClash.git /tmp/openclash
+          git -C /tmp/openclash sparse-checkout set luci-app-openclash
+          cp -a /tmp/openclash/luci-app-openclash package/
 
           rm -rf package/luci-theme-argon package/luci-app-argon-config
           git clone --depth=1 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon
@@ -165,13 +170,7 @@ jobs:
           DONE=/etc/nps-wan-mac.done
           [ -e "$DONE" ] && exit 0
 
-          # app-meta-nps 0.26.10-r27 is an iStore online package. Install it
-          # after WAN connectivity is available, then configure the client.
-          if [ ! -f /etc/config/nps ] || [ ! -x /etc/init.d/nps ]; then
-                  command -v is-opkg >/dev/null 2>&1 || exit 1
-                  is-opkg update >/tmp/nps-istore-install.log 2>&1 || exit 1
-                  is-opkg install app-meta-nps >>/tmp/nps-istore-install.log 2>&1 || exit 1
-          fi
+          # luci-app-nps and npc are built into the image from the source feeds.
           [ -f /etc/config/nps ] && [ -x /etc/init.d/nps ] || exit 1
           valid_mac() {
                   case "$1" in ''|00:00:00:00:00:00) return 1;; ??:??:??:??:??:??) return 0;; *) return 1;; esac
@@ -244,12 +243,12 @@ jobs:
           chmod 0755 package/base-files/files/etc/hotplug.d/iface/99-nps-wan-mac
           chmod 0755 package/base-files/files/etc/uci-defaults/99-enable-nps-wan-mac
 
-          sed -i "s/192\\.168\\.[0-9]*\\.[0-9]*/192.168.7.1/g" \
+          sed -i "s/192\\.168\\.[0-9]*\\.[0-9]*/192.168.9.1/g" \
             package/base-files/files/bin/config_generate
           sed -i "s/hostname='.*'/hostname='DulWiFi'/g" \
             package/base-files/files/bin/config_generate
 
-          ROOT_HASH="$(openssl passwd -1 '@password@')"
+          ROOT_HASH="$(openssl passwd -1 'password')"
           sed -i "s#^root:[^:]*:#root:${ROOT_HASH}:#" \
             package/base-files/files/etc/shadow
 
@@ -265,12 +264,12 @@ jobs:
             PACKAGE_luci-app-store PACKAGE_luci-app-quickstart \
             PACKAGE_luci-theme-argon PACKAGE_luci-app-argon-config \
             PACKAGE_luci-app-ttyd PACKAGE_luci-app-passwall \
-            PACKAGE_luci-app-passwall2 PACKAGE_luci-app-homeproxy; do
+            PACKAGE_luci-app-passwall2 PACKAGE_luci-app-homeproxy \
+            PACKAGE_luci-app-openclash PACKAGE_luci-app-nps PACKAGE_npc \
+            PACKAGE_luci-app-advanced-reboot PACKAGE_luci-app-watchcat; do
             sed -i "/^CONFIG_${symbol}=/d;/^# CONFIG_${symbol} is not set/d" .config
             echo "CONFIG_${symbol}=y" >> .config
           done
-          sed -i '/^CONFIG_PACKAGE_luci-app-npc=/d;/^# CONFIG_PACKAGE_luci-app-npc is not set/d' .config
-          echo '# CONFIG_PACKAGE_luci-app-npc is not set' >> .config
           sed -i '/^CONFIG_WARP_VERSION=/d;/^CONFIG_WARP_CHIPSET=/d' .config
           printf '%s\n' 'CONFIG_WARP_VERSION=2' 'CONFIG_WARP_CHIPSET="mt7981"' 'CONFIG_MTK_WARP_V2=y' 'CONFIG_MTK_WHNAT_SUPPORT=m' >> .config
           make defconfig
@@ -293,12 +292,11 @@ jobs:
           grep -q '^CONFIG_PACKAGE_luci-app-passwall=y' .config
           grep -q '^CONFIG_PACKAGE_luci-app-passwall2=y' .config
           grep -q '^CONFIG_PACKAGE_luci-app-homeproxy=y' .config
-          # NPS is deliberately installed by iStore on first WAN connection,
-          # so the newer feed build must not be baked into the image.
-          ! grep -q '^CONFIG_PACKAGE_nps=y' .config
-          ! grep -q '^CONFIG_PACKAGE_npc=y' .config
-          ! grep -q '^CONFIG_PACKAGE_luci-app-nps=y' .config
-          ! grep -q '^CONFIG_PACKAGE_luci-app-npc=y' .config
+          grep -q '^CONFIG_PACKAGE_luci-app-openclash=y' .config
+          grep -q '^CONFIG_PACKAGE_luci-app-nps=y' .config
+          grep -q '^CONFIG_PACKAGE_npc=y' .config
+          grep -q '^CONFIG_PACKAGE_luci-app-advanced-reboot=y' .config
+          grep -q '^CONFIG_PACKAGE_luci-app-watchcat=y' .config
           ./scripts/diffconfig.sh | tee "$GITHUB_WORKSPACE/HY3000-MTK-WiFi-LuCI-NPS-final.config"
 
       - name: Download sources
@@ -349,9 +347,9 @@ jobs:
           grep -q '^kmod-conninfra ' "${manifests[0]}" || { echo 'ERROR: kmod-conninfra is missing from HY3000 firmware.'; exit 1; }
           grep -q '^mtwifi-cfg ' "${manifests[0]}" || { echo 'ERROR: mtwifi-cfg is missing from HY3000 firmware.'; exit 1; }
           grep -q '^luci-app-store ' "${manifests[0]}" || { echo 'ERROR: iStore is missing; app-meta-nps cannot be installed.'; exit 1; }
-          ! grep -q '^nps ' "${manifests[0]}"
-          ! grep -q '^npc ' "${manifests[0]}"
-          ! grep -q '^luci-app-nps ' "${manifests[0]}"
+          for package in luci-app-passwall luci-app-passwall2 luci-app-homeproxy luci-app-openclash luci-app-nps npc luci-app-advanced-reboot luci-app-watchcat; do
+            grep -q "^${package} " "${manifests[0]}" || { echo "ERROR: ${package} missing"; exit 1; }
+          done
           cp -a "${manifests[@]}" upload/
           find bin/targets/mediatek/filogic -maxdepth 1 -type f -name '*.buildinfo' -exec cp -a {} upload/ \;
           cp "$GITHUB_WORKSPACE/HY3000-MTK-WiFi-LuCI-NPS-final.config" upload/
@@ -361,7 +359,7 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Philips-HY3000-MTK-WiFi-LuCI-NPS-24.10-${{ env.BUILD_DATE }}
+          name: Philips-HY3000-DulWiFi-Full-NPS-24.10-${{ env.BUILD_DATE }}
           path: wrt/upload/*
           if-no-files-found: error
           retention-days: 30
@@ -369,15 +367,15 @@ jobs:
       - name: Publish firmware release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: Philips-HY3000-MTK-WiFi-LuCI-NPS-24.10-${{ env.BUILD_DATE }}
-          name: Philips HY3000 MTK WiFi LuCI NPS 24.10 ${{ env.BUILD_DATE }}
+          tag_name: Philips-HY3000-DulWiFi-Full-NPS-24.10-${{ env.BUILD_DATE }}
+          name: Philips HY3000 DulWiFi Full NPS 24.10 ${{ env.BUILD_DATE }}
           files: wrt/upload/*
           body: |
             Philips HY3000 eMMC / MT7981 / source-default memory definition / ImmortalWrt 24.10 / kernel 6.6
             Source commit: ${{ env.WRT_HASH }}
-            Management IP: 192.168.7.1
+            Management IP: 192.168.9.1; root password: password; Wi-Fi password: password
             Wi-Fi: DulWiFi-5G / DulWiFi-2.4G
             PassWall: 26.3.6-1
             PassWall2: 26.3.5-1
-            Included: fixed MT7981 mt_wifi driver, iStore, QuickStart home page, Argon theme, TTYD, common LuCI tools, PassWall, PassWall2, HomeProxy, and iStore first-boot installation of app-meta-nps 0.26.10-r27 with its LuCI UI and Chinese translation
-            NPS client: iStore app-meta-nps 0.26.10-r27 is installed automatically after first WAN connection, then configured for 47.83.9.208:8024 TCP with compression, encryption and uppercase physical WAN MAC vkey.
+            Included: source-default MT7981 proprietary Wi-Fi using Factory EEPROM, iStore, QuickStart, Argon, TTYD, common LuCI tools, PassWall, PassWall2, HomeProxy, OpenClash, advanced reboot, Watchcat scheduled reboot, luci-app-nps and npc
+            NPS client: built from the source feed and configured once after the physical WAN becomes available for 47.83.9.208:8024 TCP with compression, encryption and uppercase physical WAN MAC vkey.
