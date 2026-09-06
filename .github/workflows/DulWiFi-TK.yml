@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [konka-komi-a31-DulWiFi-TK]
-    paths: ['.github/workflows/konka_komi-a31.yml']
+    paths: ['.github/workflows/DulWiFi-TK.yml']
 
 permissions:
   contents: write
