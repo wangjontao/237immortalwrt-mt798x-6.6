@@ -51,6 +51,14 @@ jobs:
           ./scripts/feeds install -d y -p nas_packages quickstart
           ./scripts/feeds install -d y -p nas_luci luci-app-quickstart
 
+          # This fork's GCC 13 fortify headers trigger libxcrypt's upstream
+          # format-nonliteral warning. libxcrypt promotes every warning to an
+          # error, so downgrade only this known warning.
+          LIBXCRYPT_MAKEFILE="feeds/packages/libs/libxcrypt/Makefile"
+          test -f "$LIBXCRYPT_MAKEFILE"
+          sed -i '/^include \$(INCLUDE_DIR)\/package.mk$/i TARGET_CFLAGS += -Wno-error=format-nonliteral' "$LIBXCRYPT_MAKEFILE"
+          grep -q 'TARGET_CFLAGS += -Wno-error=format-nonliteral' "$LIBXCRYPT_MAKEFILE"
+
       - name: Add pinned proxy and UI sources
         run: |
           rm -rf package/luci-app-passwall package/luci-app-passwall2 package/passwall-packages
