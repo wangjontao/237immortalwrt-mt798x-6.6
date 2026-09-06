@@ -16,7 +16,6 @@ env:
   PASSWALL_TAG: 26.3.6-1
   PASSWALL2_TAG: 26.3.5-1
   PASSWALL_PACKAGES_COMMIT: 3e11c458c552aefd348232c627fd1ed9f8f08e41
-  NPS_OPENWRT_COMMIT: 480f2e502575641a0c9280d6fad971550621316d
   HOME_PROXY_COMMIT: edece28a0085f36d469ec82c8d45f562f602db53
 
 jobs:
@@ -80,18 +79,14 @@ jobs:
           ./scripts/feeds install -d y -p nas_packages quickstart
           ./scripts/feeds install -d y -p nas_luci luci-app-quickstart
 
-      - name: Add fixed proxy and NPC packages
+      - name: Add fixed proxy packages and use feed-provided NPS
         working-directory: wrt
         run: |
           rm -rf package/luci-app-passwall package/luci-app-passwall2 \
-            package/passwall-packages package/npc package/luci-app-npc \
+            package/passwall-packages package/luci-app-npc \
             feeds/luci/applications/luci-app-passwall \
             feeds/luci/applications/luci-app-passwall2 \
-            feeds/luci/applications/luci-app-npc \
-            feeds/luci/applications/luci-app-nps \
-            feeds/packages/net/npc feeds/packages/net/nps \
-            package/feeds/luci/luci-app-npc package/feeds/luci/luci-app-nps \
-            package/feeds/packages/npc package/feeds/packages/nps
+            package/feeds/luci/luci-app-npc
 
           git clone --depth=1 --branch "$PASSWALL_TAG" \
             https://github.com/Openwrt-Passwall/openwrt-passwall.git /tmp/openwrt-passwall
@@ -106,16 +101,12 @@ jobs:
           git -C package/passwall-packages checkout "$PASSWALL_PACKAGES_COMMIT"
           rm -rf package/passwall-packages/.git
 
-          git clone https://github.com/djylb/nps-openwrt.git /tmp/nps-openwrt
-          git -C /tmp/nps-openwrt checkout "$NPS_OPENWRT_COMMIT"
-          cp -a /tmp/nps-openwrt/npc package/
-
-          # Client UI with separate address/port fields, matching the reference image.
-          git clone --depth=1 --filter=blob:none --sparse https://github.com/coolsnowwolf/luci.git /tmp/lean-luci
-          git -C /tmp/lean-luci sparse-checkout set applications/luci-app-nps
-          cp -a /tmp/lean-luci/applications/luci-app-nps package/luci-app-nps
-          sed -i 's#include ../../luci.mk#include $(TOPDIR)/feeds/luci/luci.mk#' package/luci-app-nps/Makefile
-          cat > package/luci-app-nps/root/etc/config/nps <<'NPS_CONFIG'
+          # Use the mutually compatible NPS packages supplied by this source's feeds.
+          ./scripts/feeds install -f -p packages nps npc
+          ./scripts/feeds install -f -p luci luci-app-nps luci-i18n-nps-zh-cn
+          NPS_CONFIG_FILE="$(find package/feeds/luci feeds/luci -path '*/luci-app-nps/root/etc/config/nps' -type f | head -n1)"
+          test -n "$NPS_CONFIG_FILE"
+          cat > "$NPS_CONFIG_FILE" <<'NPS_CONFIG'
           config nps
                   option enabled '1'
                   option server_addr '47.83.9.208'
@@ -282,7 +273,8 @@ jobs:
             PACKAGE_luci-theme-argon PACKAGE_luci-app-argon-config \
             PACKAGE_luci-app-ttyd PACKAGE_luci-app-passwall \
             PACKAGE_luci-app-passwall2 PACKAGE_luci-app-homeproxy \
-            PACKAGE_luci-app-nps; do
+            PACKAGE_nps PACKAGE_npc PACKAGE_luci-app-nps \
+            PACKAGE_luci-i18n-nps-zh-cn; do
             sed -i "/^CONFIG_${symbol}=/d;/^# CONFIG_${symbol} is not set/d" .config
             echo "CONFIG_${symbol}=y" >> .config
           done
@@ -310,7 +302,10 @@ jobs:
           grep -q '^CONFIG_PACKAGE_luci-app-passwall=y' .config
           grep -q '^CONFIG_PACKAGE_luci-app-passwall2=y' .config
           grep -q '^CONFIG_PACKAGE_luci-app-homeproxy=y' .config
+          grep -q '^CONFIG_PACKAGE_nps=y' .config
+          grep -q '^CONFIG_PACKAGE_npc=y' .config
           grep -q '^CONFIG_PACKAGE_luci-app-nps=y' .config
+          grep -q '^CONFIG_PACKAGE_luci-i18n-nps-zh-cn=y' .config
           ! grep -q '^CONFIG_PACKAGE_luci-app-npc=y' .config
           ./scripts/diffconfig.sh | tee "$GITHUB_WORKSPACE/HY3000-MTK-WiFi-LuCI-NPS-final.config"
 
@@ -337,7 +332,8 @@ jobs:
           make package/mtk/drivers/warp/compile -j1 V=s
           make package/mtk/drivers/mt_wifi/compile -j1 V=s
           make package/feeds/packages/sing-box/compile -j1 V=s
-          make package/npc/compile -j1 V=s
+          make package/feeds/packages/nps/compile -j1 V=s
+          make package/feeds/packages/npc/compile -j1 V=s
 
       - name: Compile full firmware after critical packages
         working-directory: wrt
@@ -362,8 +358,10 @@ jobs:
           grep -q '^kmod-mt_wifi ' "${manifests[0]}" || { echo 'ERROR: kmod-mt_wifi is missing from HY3000 firmware.'; exit 1; }
           grep -q '^kmod-conninfra ' "${manifests[0]}" || { echo 'ERROR: kmod-conninfra is missing from HY3000 firmware.'; exit 1; }
           grep -q '^mtwifi-cfg ' "${manifests[0]}" || { echo 'ERROR: mtwifi-cfg is missing from HY3000 firmware.'; exit 1; }
-          grep -q '^luci-app-nps ' "${manifests[0]}" || { echo 'ERROR: luci-app-nps is missing from HY3000 firmware.'; exit 1; }
-          grep -q '^npc ' "${manifests[0]}" || { echo 'ERROR: npc client is missing from HY3000 firmware.'; exit 1; }
+          grep -q '^nps ' "${manifests[0]}" || { echo 'ERROR: feed nps server is missing from HY3000 firmware.'; exit 1; }
+          grep -q '^luci-app-nps ' "${manifests[0]}" || { echo 'ERROR: feed luci-app-nps is missing from HY3000 firmware.'; exit 1; }
+          grep -q '^luci-i18n-nps-zh-cn ' "${manifests[0]}" || { echo 'ERROR: NPS Chinese translation is missing from HY3000 firmware.'; exit 1; }
+          grep -q '^npc ' "${manifests[0]}" || { echo 'ERROR: feed npc client is missing from HY3000 firmware.'; exit 1; }
           cp -a "${manifests[@]}" upload/
           find bin/targets/mediatek/filogic -maxdepth 1 -type f -name '*.buildinfo' -exec cp -a {} upload/ \;
           cp "$GITHUB_WORKSPACE/HY3000-MTK-WiFi-LuCI-NPS-final.config" upload/
@@ -391,5 +389,5 @@ jobs:
             Wi-Fi: DulWiFi-5G / DulWiFi-2.4G
             PassWall: 26.3.6-1
             PassWall2: 26.3.5-1
-            Included: fixed MT7981 mt_wifi driver, iStore, QuickStart home page, Argon theme, TTYD, common LuCI tools, PassWall, PassWall2, HomeProxy, luci-app-nps client
+            Included: fixed MT7981 mt_wifi driver, iStore, QuickStart home page, Argon theme, TTYD, common LuCI tools, PassWall, PassWall2, HomeProxy, and feed-provided nps/npc/luci-app-nps with Chinese translation
             NPS client: 47.83.9.208:8024 TCP with compression and encryption; first successful startup writes the physical WAN MAC as uppercase vkey without colons.
