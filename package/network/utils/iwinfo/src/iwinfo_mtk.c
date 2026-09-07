@@ -13,6 +13,7 @@ static inline int mtk_ioctl(const char *ifname, int cmd, struct iwreq *wrq)
 
 static const char *mtk_dev2phy(const char *devname)
 {
+	static char phyname[IFNAMSIZ];
 	const char *phy = NULL;
 	struct uci_section *s;
 
@@ -24,6 +25,13 @@ static const char *mtk_dev2phy(const char *devname)
 		goto out;
 	
 	phy = uci_lookup_option_string(uci_ctx, s, "phy");
+	/* Keep the interface name valid after freeing the UCI context. */
+	if (phy && *phy && strlen(phy) < sizeof(phyname)) {
+		memcpy(phyname, phy, strlen(phy) + 1);
+		phy = phyname;
+	} else {
+		phy = NULL;
+	}
 
 out:
 	iwinfo_uci_free();
