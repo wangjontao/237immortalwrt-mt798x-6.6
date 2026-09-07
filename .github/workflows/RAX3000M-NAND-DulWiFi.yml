@@ -239,7 +239,14 @@ jobs:
         run: |
           ROOTFS="$(find build_dir -path '*/root-mediatek/etc/shadow' -type f | head -n1)"
           test -n "$ROOTFS"
-          cmp files/etc/shadow "$ROOTFS"
+          EXPECTED_HASH="$(cut -d: -f2 files/etc/shadow | head -n1)"
+          ACTUAL_HASH="$(awk -F: '$1 == "root" {print $2}' "$ROOTFS")"
+          test -n "$EXPECTED_HASH"
+          if [ "$ACTUAL_HASH" != "$EXPECTED_HASH" ]; then
+            echo 'ERROR: final root password hash differs from configured password'
+            exit 1
+          fi
+          echo 'Final root password hash verified; additional system accounts are allowed.'
           ROOTDIR="${ROOTFS%/etc/shadow}"
           grep -q "hostname='DulWiFi-Tk'" "$ROOTDIR/etc/uci-defaults/90-dulwifi-defaults"
           grep -q '192.168.9.1' "$ROOTDIR/etc/uci-defaults/90-dulwifi-defaults"
