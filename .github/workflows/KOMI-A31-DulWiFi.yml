@@ -207,7 +207,9 @@ jobs:
           CONFIG_PACKAGE_mtwifi-cfg=y
           CONFIG_PACKAGE_luci-app-mtwifi-cfg=y
           CONFIG_PACKAGE_luci-app-store=y
-          CONFIG_PACKAGE_istore=y
+          CONFIG_PACKAGE_taskd=y
+          CONFIG_PACKAGE_luci-lib-taskd=y
+          CONFIG_PACKAGE_luci-lib-xterm=y
           CONFIG_PACKAGE_luci-app-quickstart=y
           CONFIG_PACKAGE_quickstart=y
           CONFIG_PACKAGE_luci-theme-argon=y
@@ -227,7 +229,7 @@ jobs:
 
           make defconfig
           grep -q '^CONFIG_TARGET_mediatek_filogic_DEVICE_konka_komi-a31=y$' .config
-          for p in kmod-conninfra kmod-mt_wifi kmod-warp mtwifi-cfg luci-app-mtwifi-cfg istore luci-app-store quickstart luci-app-quickstart luci-theme-argon luci-app-argon-config luci-app-ttyd luci-app-passwall luci-app-passwall2 luci-app-homeproxy luci-app-nps npc; do
+          for p in kmod-conninfra kmod-mt_wifi kmod-warp mtwifi-cfg luci-app-mtwifi-cfg taskd luci-lib-taskd luci-lib-xterm luci-app-store quickstart luci-app-quickstart luci-theme-argon luci-app-argon-config luci-app-ttyd luci-app-passwall luci-app-passwall2 luci-app-homeproxy luci-app-nps npc; do
             grep -q "^CONFIG_PACKAGE_$p=y$" .config || { echo "Missing $p"; exit 1; }
           done
           ! grep -q '^CONFIG_PACKAGE_kmod-mt7915e=y$' .config
@@ -253,7 +255,7 @@ jobs:
           test -n "$UBOOT"
           MANIFEST=$(find bin/targets/mediatek/filogic -type f -name "*konka_komi-a31*.manifest" | head -n1)
           test -n "$MANIFEST"
-          for p in kmod-mt_wifi istore luci-app-store quickstart luci-app-quickstart luci-theme-argon luci-app-argon-config luci-app-ttyd luci-app-passwall luci-app-passwall2 luci-app-homeproxy luci-app-nps npc; do
+          for p in kmod-mt_wifi taskd luci-lib-taskd luci-lib-xterm luci-app-store quickstart luci-app-quickstart luci-theme-argon luci-app-argon-config luci-app-ttyd luci-app-passwall luci-app-passwall2 luci-app-homeproxy luci-app-nps npc; do
             grep -q "^$p " "$MANIFEST" || { echo "ERROR: $p missing from firmware"; exit 1; }
           done
           cp "$IMAGE" "$PRELOADER" "$UBOOT" "$MANIFEST" build.config release/
