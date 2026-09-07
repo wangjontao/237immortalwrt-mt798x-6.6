@@ -94,9 +94,8 @@ jobs:
           mkdir -p package/base-files/files/etc/uci-defaults package/base-files/files/usr/libexec package/base-files/files/etc/init.d package/base-files/files/etc/hotplug.d/iface
           cat > package/base-files/files/etc/uci-defaults/90-dulwifi-defaults <<'DEFAULTS'
           #!/bin/sh
-          uci -q set network.lan.ipaddr='192.168.7.1'
+          uci -q set network.lan.ipaddr='192.168.9.1'
           uci -q commit network
-          echo -e '@password@\n@password@' | passwd root
           n=0
           for s in $(uci -q show wireless | sed -n "s/^wireless\.\([^=]*\)=wifi-iface$/\1/p"); do
             n=$((n+1))
@@ -161,6 +160,13 @@ jobs:
           ENABLE
           chmod 0755 package/base-files/files/etc/uci-defaults/90-dulwifi-defaults package/base-files/files/usr/libexec/nps-wan-mac package/base-files/files/etc/init.d/nps-wan-mac package/base-files/files/etc/hotplug.d/iface/99-nps-wan-mac package/base-files/files/etc/uci-defaults/99-enable-nps-wan-mac
 
+          # Set the image password at build time.  Piping text to passwd from
+          # uci-defaults is not reliable and produced an empty root password.
+          ROOT_HASH="$(openssl passwd -1 'password')"
+          test -f package/base-files/files/etc/shadow
+          sed -i "s#^root:[^:]*:#root:${ROOT_HASH}:#" package/base-files/files/etc/shadow
+          grep -q '^root:\$1\$' package/base-files/files/etc/shadow
+
       - name: Select KOMI A31 with MTK proprietary WiFi and full packages
         run: |
           # Seed the source tree's MT7981 vendor WiFi feature switches, then select
@@ -201,7 +207,9 @@ jobs:
           CONFIG_PACKAGE_mtwifi-cfg=y
           CONFIG_PACKAGE_luci-app-mtwifi-cfg=y
           CONFIG_PACKAGE_luci-app-store=y
+          CONFIG_PACKAGE_istore=y
           CONFIG_PACKAGE_luci-app-quickstart=y
+          CONFIG_PACKAGE_quickstart=y
           CONFIG_PACKAGE_luci-theme-argon=y
           CONFIG_PACKAGE_luci-app-argon-config=y
           CONFIG_PACKAGE_luci-app-ttyd=y
@@ -219,7 +227,7 @@ jobs:
 
           make defconfig
           grep -q '^CONFIG_TARGET_mediatek_filogic_DEVICE_konka_komi-a31=y$' .config
-          for p in kmod-conninfra kmod-mt_wifi kmod-warp mtwifi-cfg luci-app-mtwifi-cfg luci-app-store luci-app-quickstart luci-theme-argon luci-app-ttyd luci-app-passwall luci-app-passwall2 luci-app-homeproxy luci-app-nps npc; do
+          for p in kmod-conninfra kmod-mt_wifi kmod-warp mtwifi-cfg luci-app-mtwifi-cfg istore luci-app-store quickstart luci-app-quickstart luci-theme-argon luci-app-argon-config luci-app-ttyd luci-app-passwall luci-app-passwall2 luci-app-homeproxy luci-app-nps npc; do
             grep -q "^CONFIG_PACKAGE_$p=y$" .config || { echo "Missing $p"; exit 1; }
           done
           ! grep -q '^CONFIG_PACKAGE_kmod-mt7915e=y$' .config
@@ -245,7 +253,9 @@ jobs:
           test -n "$UBOOT"
           MANIFEST=$(find bin/targets/mediatek/filogic -type f -name "*konka_komi-a31*.manifest" | head -n1)
           test -n "$MANIFEST"
-          for p in kmod-mt_wifi luci-app-store luci-app-passwall luci-app-passwall2 luci-app-homeproxy luci-app-nps npc; do grep -q "^$p " "$MANIFEST" || exit 1; done
+          for p in kmod-mt_wifi istore luci-app-store quickstart luci-app-quickstart luci-theme-argon luci-app-argon-config luci-app-ttyd luci-app-passwall luci-app-passwall2 luci-app-homeproxy luci-app-nps npc; do
+            grep -q "^$p " "$MANIFEST" || { echo "ERROR: $p missing from firmware"; exit 1; }
+          done
           cp "$IMAGE" "$PRELOADER" "$UBOOT" "$MANIFEST" build.config release/
           sha256sum release/* | tee release/SHA256SUMS
       - uses: actions/upload-artifact@v4
@@ -258,4 +268,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="KOMI-A31-DulWiFi-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" release/* --target "${GITHUB_SHA}" --title "KOMI A31 DulWiFi ${GITHUB_RUN_NUMBER}" --notes "KONKA KOMI A31 / E-Life ETR631-T / ETR635-U SPI-NAND U-Boot layout; 237 source MTK proprietary WiFi; 192.168.7.1/@password@; DulWiFi 2.4G and 5G; PassWall 26.3.6-1; PassWall2 26.3.5-1; HomeProxy, iStore, QuickStart, Argon, TTYD and feed NPS. NPS uses first-boot physical WAN MAC key and 47.83.9.208:8024."
+          gh release create "$TAG" release/* --target "${GITHUB_SHA}" --title "KOMI A31 DulWiFi ${GITHUB_RUN_NUMBER}" --notes "KONKA KOMI A31 / E-Life ETR631-T / ETR635-U SPI-NAND U-Boot layout; 237 source MTK proprietary WiFi; management 192.168.9.1/password; DulWiFi 2.4G and 5G; PassWall 26.3.6-1; PassWall2 26.3.5-1; HomeProxy, verified iStore + QuickStart UI, Argon, TTYD and feed NPS. NPS uses first-boot physical WAN MAC key and 47.83.9.208:8024."
