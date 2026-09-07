@@ -94,12 +94,25 @@ jobs:
 
       - name: Add first boot settings
         run: |
+          ROOT_HASH="$(openssl passwd -1 'password')"
+          sed -i "s#^root:[^:]*:#root:${ROOT_HASH}:#" package/base-files/files/etc/shadow
+          mkdir -p files/etc
+          cp package/base-files/files/etc/shadow files/etc/shadow
+          printf '%s\n' "$ROOT_HASH" > files/etc/dulwifi-root.hash
+          chmod 600 files/etc/shadow files/etc/dulwifi-root.hash
+          grep -q '^root:\$1\$' files/etc/shadow
           mkdir -p package/base-files/files/etc/uci-defaults package/base-files/files/usr/libexec package/base-files/files/etc/init.d package/base-files/files/etc/hotplug.d/iface
           cat > package/base-files/files/etc/uci-defaults/90-dulwifi-defaults <<'DEFAULTS'
           #!/bin/sh
-          uci -q set network.lan.ipaddr='192.168.7.1'
+          uci -q set network.lan.ipaddr='192.168.9.1'
           uci -q commit network
-          echo -e '@password@\n@password@' | passwd root
+          uci -q set system.@system[0].hostname='DulWiFi-Tk'
+          uci -q commit system
+          HASH="$(cat /etc/dulwifi-root.hash)"
+          [ -n "$HASH" ] || exit 1
+          sed -i "s#^root:[^:]*:#root:${HASH}:#" /etc/shadow
+          chmod 600 /etc/shadow
+          rm -f /etc/dulwifi-root.hash
           n=0
           for s in $(uci -q show wireless | sed -n "s/^wireless\.\([^=]*\)=wifi-iface$/\1/p"); do
             n=$((n+1))
@@ -136,7 +149,7 @@ jobs:
           valid_mac "$mac" || exit 1
           key="$(printf %s "$mac" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
           uci -q set nps.@nps[0].enabled='1'
-          uci -q set nps.@nps[0].server_addr='47.83.9.208'
+          uci -q set nps.@nps[0].server_addr='8.134.201.189'
           uci -q set nps.@nps[0].server_port='8024'
           uci -q set nps.@nps[0].protocol='tcp'
           uci -q set nps.@nps[0].compress='1'
@@ -224,6 +237,13 @@ jobs:
 
       - name: Verify and collect
         run: |
+          ROOTFS="$(find build_dir -path '*/root-mediatek/etc/shadow' -type f | head -n1)"
+          test -n "$ROOTFS"
+          cmp files/etc/shadow "$ROOTFS"
+          ROOTDIR="${ROOTFS%/etc/shadow}"
+          grep -q "hostname='DulWiFi-Tk'" "$ROOTDIR/etc/uci-defaults/90-dulwifi-defaults"
+          grep -q '192.168.9.1' "$ROOTDIR/etc/uci-defaults/90-dulwifi-defaults"
+          grep -q '8.134.201.189' "$ROOTDIR/usr/libexec/nps-wan-mac"
           mkdir -p release
           IMAGE=$(find bin/targets/mediatek/filogic -type f -name "*cmcc_rax3000m-nand-mtk*sysupgrade.bin" -size +5M | head -n1)
           MANIFEST=$(find bin/targets/mediatek/filogic -type f -name "*cmcc_rax3000m-nand-mtk*.manifest" | head -n1)
@@ -244,4 +264,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="RAX3000M-NAND-DulWiFi-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" release/* --target "${GITHUB_SHA}" --title "RAX3000M NAND DulWiFi ${GITHUB_RUN_NUMBER}" --notes "CMCC RAX3000M SPI-NAND with the source MTK layout DTS; 237 source MTK proprietary WiFi; 192.168.7.1/@password@; DulWiFi 2.4G and 5G; PassWall 26.3.6-1; PassWall2 26.3.5-1; HomeProxy, OpenClash, iStore, QuickStart, Argon, TTYD and feed NPS. NPS uses first-boot physical WAN MAC key and 47.83.9.208:8024."
+          gh release create "$TAG" release/* --target "${GITHUB_SHA}" --title "RAX3000M NAND DulWiFi ${GITHUB_RUN_NUMBER}" --notes "Hostname DulWiFi-Tk; CMCC RAX3000M SPI-NAND with the source MTK layout DTS; 237 source MTK proprietary WiFi; 192.168.9.1/password; DulWiFi 2.4G and 5G; PassWall 26.3.6-1; PassWall2 26.3.5-1; HomeProxy, OpenClash, iStore, QuickStart, Argon, TTYD and feed NPS. NPS uses first-boot physical WAN MAC key and 8.134.201.189:8024."
