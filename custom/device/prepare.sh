@@ -1,12 +1,14 @@
 #!/bin/bash
 set -euo pipefail
+sed -i -E '/^src-git (passwall|passwall2|istore|nas_packages|nas_luci|openclash|homeproxy) /d' feeds.conf.default
 cat >> feeds.conf.default <<'FEEDS'
-src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall.git^6c45f659251fd91ac0e414db94710288ab9cda61
-src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git^c613dc317bec3e3bf6ac920177fbe1e69495d1c8
-src-git istore https://github.com/linkease/istore.git^3fca15b30aeed9ecacb3efc8b4a8b9c2584ad5c7
-src-git nas_packages https://github.com/linkease/nas-packages.git^b51237b6929f5c7fda6ba2a8b9cd3b7ac0ec3f82
-src-git nas_luci https://github.com/linkease/nas-packages-luci.git^c3af221503298abb6b92a2fc2a31f78f1fec13e4
-src-git openclash https://github.com/vernesong/OpenClash.git^c3a33c1d3407956fdf8f0e0b7c1a4c52e6ad9593
+src-git passwall https://github.com/Openwrt-Passwall/openwrt-passwall.git;26.3.6-1
+src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git;26.3.5-1
+src-git istore https://github.com/linkease/istore.git;main
+src-git nas_packages https://github.com/linkease/nas-packages.git;master
+src-git nas_luci https://github.com/linkease/nas-packages-luci.git;main
+src-git openclash https://github.com/vernesong/OpenClash.git;master
+src-git homeproxy https://github.com/immortalwrt/homeproxy.git;main
 FEEDS
 ./scripts/feeds update -a
 ./scripts/feeds install -a
@@ -32,6 +34,7 @@ printf '%s
 chmod 600 files/etc/shadow files/etc/dulwifi-root.hash
 chmod 755 files/etc/uci-defaults/99-zz-dulwifi files/etc/init.d/dulwifi-firstboot files/usr/libexec/dulwifi-firstboot
 ./scripts/diffconfig.sh > build.config
+
 
 
 
